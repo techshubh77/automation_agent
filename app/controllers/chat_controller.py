@@ -1,24 +1,17 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.custom_exceptions import AppError
-from app.schemas.chat_schema import ChatRequestSchema
+from app.schemas.chat_schema import ChatRequestSchema, ChatResponseSchema
 from app.services.chat_service import ChatService
 from app.utils.logger import logger
-from app.utils.response import success_response
 
 
 class ChatController:
     @staticmethod
-    async def chat(data: ChatRequestSchema, db: AsyncSession):
+    async def chat(data: ChatRequestSchema, db: AsyncSession) -> ChatResponseSchema:
         try:
-            # db is available if we want to save history to Postgres later
-            reply = await ChatService.chat(data)
-
-            return success_response(
-                message="Chat message processed successfully",
-                data={"response": reply},
-                status_code=200,
-            )
+            reply, conversation_id = await ChatService.chat(data, db)
+            return ChatResponseSchema(reply=reply, conversation_id=conversation_id)
         except AppError:
             raise
         except Exception as e:
