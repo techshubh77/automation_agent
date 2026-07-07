@@ -13,14 +13,14 @@ router = APIRouter(prefix="/ingestion", tags=["Ingestion"])
 async def ingest_json(
     file: UploadFile = File(...),
     organization_id: str | None = Form(None),
-    project_id: str | None = Form(None),
     source_type: SourceType | None = Form(None),
+    module: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     return await IngestionController.ingest_document(
         file=file,
         db=db,
         organization_id=organization_id,
-        project_id=project_id,
         source_type=source_type,
+        module=module,
     )

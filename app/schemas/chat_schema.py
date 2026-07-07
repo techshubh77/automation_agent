@@ -5,7 +5,7 @@ class ChatRequestSchema(BaseModel):
     organization_id: str | None = Field(
         None, description="Optional organization ID filter."
     )
-    project_id: str | None = Field(None, description="Optional project ID filter.")
+    module: str | None = Field(None, description="Optional module filter.")
     message: str = Field(
         ...,
         min_length=1,

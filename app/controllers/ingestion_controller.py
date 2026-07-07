@@ -14,16 +14,16 @@ class IngestionController:
         file: UploadFile,
         db: AsyncSession,
         organization_id: str | None = None,
-        project_id: str | None = None,
         source_type: SourceType | None = None,
+        module: str | None = None,
     ):
         try:
             result = await IngestionService.ingest_document(
                 db=db,
                 file=file,
                 organization_id=organization_id,
-                project_id=project_id,
                 source_type=source_type,
+                module=module,
             )
 
             return success_response(

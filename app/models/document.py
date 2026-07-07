@@ -9,7 +9,7 @@ class Document(BaseModel):
     __tablename__ = "documents"
 
     organization_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    module: Mapped[str | None] = mapped_column(String, nullable=True)
     filename: Mapped[str | None] = mapped_column(String, nullable=True)
     file_hash: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     file_type: Mapped[str | None] = mapped_column(String, nullable=True)

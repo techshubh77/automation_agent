@@ -47,7 +47,9 @@ async def lifespan(app: FastAPI):
 
     # Validate OpenAI API Key is present before accepting any requests
     if not settings.openai_api_key:
-        logger.critical("OPENAI_API_KEY is not set in environment. AI features will not work.")
+        logger.critical(
+            "OPENAI_API_KEY is not set in environment. AI features will not work."
+        )
         raise RuntimeError("OPENAI_API_KEY is required to start this application.")
     logger.info("OpenAI API key validated successfully.")
 

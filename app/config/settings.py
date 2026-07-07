@@ -17,9 +17,9 @@ class Settings(BaseSettings):
 
     # AI Settings
     qdrant_url: str = "http://localhost:6333"
-    qdrant_vector_size: int = 1536
+    embedding_dimensions: int = 1536
     openai_api_key: str | None = None
-    open_model_name: str = "text-embedding-3-small"
+    embedding_model_name: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-4o-mini"
     similarity_threshold: float = 0.5
     top_k_chunks: int = 3

@@ -11,7 +11,7 @@ class TextChunker:
         """
         Splits a large text block into smaller overlapping chunks.
         We use characters instead of strict tokens for speed in this MVP.
-        2000 characters is roughly equal to ~500 tokens.
+        1000 characters is roughly equal to ~250 tokens.
         """
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,

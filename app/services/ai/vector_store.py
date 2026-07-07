@@ -24,7 +24,7 @@ class VectorStore:
             client.create_collection(
                 collection_name=cls.COLLECTION_NAME,
                 vectors_config=VectorParams(
-                    size=settings.qdrant_vector_size, distance=Distance.COSINE
+                    size=settings.embedding_dimensions, distance=Distance.COSINE
                 ),
             )
 
@@ -41,7 +41,8 @@ class VectorStore:
         ]
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
-            None, lambda: client.upsert(collection_name=cls.COLLECTION_NAME, points=points)
+            None,
+            lambda: client.upsert(collection_name=cls.COLLECTION_NAME, points=points),
         )
 
     @classmethod

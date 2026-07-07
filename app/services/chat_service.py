@@ -39,14 +39,14 @@ class ChatService:
         if data.organization_id:
             filter_conditions.append(
                 rest.FieldCondition(
-                    key="organization_id",
+                    key="metadata.organization_id",
                     match=rest.MatchValue(value=data.organization_id),
                 )
             )
-        if data.project_id:
+        if data.module:
             filter_conditions.append(
                 rest.FieldCondition(
-                    key="project_id", match=rest.MatchValue(value=data.project_id)
+                    key="metadata.module", match=rest.MatchValue(value=data.module)
                 )
             )
 
