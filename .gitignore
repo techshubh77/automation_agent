@@ -1,0 +1,78 @@
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+
+
+# PYTHON
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+
+# ENVIRONMENT & PACKAGE MANAGER
+.venv/
+venv/
+# BUILD & DISTRIBUTION
+dist/
+build/
+*.egg-info/
+
+
+# TESTING & LINTING
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+
+# LOGS
+*.log
+logs/
+
+
+# DATABASE (local dev only)
+*.db
+*.sqlite3
+# DATABASE (local dev only)
+*.db
+*.sqlite3
+# AI — model weights are GBs, use object storage
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.pkl
+*.onnx
+
+
+
+# UPLOADS & GENERATED STORAGE
+storage/
+uploads/
+
+
+# REDIS
+dump.rdb
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+.agent/
+.agents/
+
+
+# OS
+.DS_Store
+
+
+# SONARQUBE
+.sonar/
+.scannerwork/

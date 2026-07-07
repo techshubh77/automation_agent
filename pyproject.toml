@@ -1,0 +1,76 @@
+[project]
+name = "automation-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.18.5",
+    "argon2-cffi>=25.1.0",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.139.0",
+    "httpx>=0.28.1",
+    "langchain>=1.3.11",
+    "langchain-community>=0.4.2",
+    "langchain-openai>=1.3.3",
+    "langchain-qdrant>=1.1.0",
+    "langchain-text-splitters>=1.1.2",
+    "loguru>=0.7.3",
+    "openai>=2.44.0",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "pysonar>=1.6.0.4905",
+    "python-multipart>=0.0.32",
+    "qdrant-client>=1.18.0",
+    "secure>=2.0.1",
+    "sentence-transformers>=5.6.0",
+    "slowapi>=0.1.10",
+    "sqlalchemy>=2.0.51",
+    "uvicorn[standard]>=0.49.0",
+]
+
+[tool.ruff]
+# Ignore auto-generated Alembic files
+exclude = ["app/migrations"]
+# Set the maximum line length to 88 (industry standard, matches Black)
+line-length = 88
+# Assume Python 3.13
+target-version = "py313"
+
+[tool.ruff.lint]
+# A robust set of rules for a modern Python project
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (upgrades syntax to modern Python)
+    "B",   # flake8-bugbear (finds likely bugs and design problems)
+    "SIM", # flake8-simplify (helps simplify code)
+    "RUF", # ruff-specific rules
+    "C4",  # flake8-comprehensions (better list/dict/set comprehensions)
+    "N",   # pep8-naming (enforces naming conventions)
+    "PT",  # flake8-pytest-style (if you use pytest)
+    "RET", # flake8-return (checks return values)
+]
+ignore = [
+    "E501", # line too long, handled by the formatter
+    "B008", # do not perform function calls in argument defaults (often conflicts with FastAPI Depends())
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore unused imports in __init__.py files
+"__init__.py" = ["F401"]
+# Ignore naming and assertions in tests
+"tests/*" = ["N802", "S101"] 
+
+[tool.ruff.format]
+# Enable auto-formatting of code snippets in docstrings
+docstring-code-format = true
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.20",
+]
