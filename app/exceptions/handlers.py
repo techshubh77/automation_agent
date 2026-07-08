@@ -1,8 +1,7 @@
-from fastapi import Request
+from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.constants.status_codes import StatusCode
 from app.exceptions.custom_exceptions import AppError
 from app.utils.logger import logger
 from app.utils.response import error_response
@@ -30,7 +29,7 @@ def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
     logger.error(f"ValidationError on {request.url}")
     return error_response(
-        status_code=StatusCode.UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         message="Validation failed.",
         errors=exc.errors(),
     )
@@ -43,5 +42,5 @@ def global_exception_handler(request: Request, exc: Exception):
     logger.exception(f"Unhandled Exception: {exc!s} on {request.url}")
     # In production, you might want to obscure the message like Node.js does
     return error_response(
-        status_code=StatusCode.INTERNAL_SERVER_ERROR, message="Something went wrong!"
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, message="Something went wrong!"
     )

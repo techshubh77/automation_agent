@@ -18,7 +18,7 @@ class Embedder:
     async def embed_documents(cls, texts: list[str]) -> list[list[float]]:
         client = cls.get_client()
         response = await client.embeddings.create(
-            input=texts, model=settings.embedding_model_name
+            input=texts, model=settings.openai_embedding_model
         )
 
         embeddings = sorted(response.data, key=lambda x: x.index)

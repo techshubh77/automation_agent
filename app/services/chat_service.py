@@ -1,11 +1,9 @@
-import uuid
 from pathlib import Path
 
-from langchain_community.callbacks.manager import get_openai_callback
+from fastapi import status
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
 from qdrant_client.http import models as rest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +12,7 @@ from app.config.settings import settings
 from app.exceptions.custom_exceptions import AppError
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.providers.llm.factory import LLMFactory
 from app.schemas.chat_schema import ChatRequestSchema
 from app.services.ai.langchain_store import LangchainStore
 from app.utils.logger import logger
@@ -24,18 +23,6 @@ with open(PROMPTS_DIR / "system_prompt.txt", encoding="utf-8") as f:
 
 
 class ChatService:
-    _llm: ChatOpenAI | None = None
-
-    @classmethod
-    def get_llm(cls) -> ChatOpenAI:
-        if cls._llm is None:
-            cls._llm = ChatOpenAI(
-                model=settings.openai_chat_model,
-                api_key=settings.openai_api_key,
-                temperature=0.7,
-            )
-        return cls._llm
-
     @staticmethod
     async def chat(data: ChatRequestSchema, db: AsyncSession) -> tuple[str, str]:
         logger.info(f"Received chat request: {data.message}")
@@ -53,13 +40,16 @@ class ChatService:
                 conv_uuid = new_conv.id
             else:
                 logger.info(f"Resuming conversation {data.conversation_id}")
-                conv_uuid = uuid.UUID(data.conversation_id)
+                conv_uuid = data.conversation_id  # Already a UUID, validated by Pydantic schema
                 # Verify conversation exists
                 existing = await db.execute(
                     select(Conversation).where(Conversation.id == conv_uuid)
                 )
                 if not existing.scalar_one_or_none():
-                    raise AppError(f"Conversation {data.conversation_id} not found", 404)
+                    raise AppError(
+                        f"Conversation {data.conversation_id} not found",
+                        status.HTTP_404_NOT_FOUND,
+                    )
 
             # 2. Save the Human Message
             db.add(
@@ -71,8 +61,8 @@ class ChatService:
             )
             await db.flush()
 
-            # 3. Retrieve Memory (Sliding Window: Last 6 messages / 3 turns)
-            logger.info("Fetching last 6 messages for context window...")
+            # 3. Retrieve Memory (Sliding Window: Last 10 messages / 5 turns)
+            logger.info("Fetching last 10 messages for context window...")
             result = await db.execute(
                 select(Message)
                 .where(Message.conversation_id == conv_uuid)
@@ -113,7 +103,6 @@ class ChatService:
             if filter_conditions:
                 search_kwargs["filter"] = rest.Filter(must=filter_conditions)
 
-            llm = ChatService.get_llm()
             vector_store = LangchainStore.get_vector_store()
             retriever = vector_store.as_retriever(
                 search_type="similarity_score_threshold", search_kwargs=search_kwargs
@@ -131,19 +120,23 @@ class ChatService:
                 ]
             )
 
-            rag_chain = qa_prompt | llm | StrOutputParser()
+            # 7. Execute Native LangChain Fallback
+            logger.info("Retrieving robust LLM from Factory...")
+            robust_llm = LLMFactory.get_robust_llm()
 
-            # 7. Execute Chain
-            logger.info("Executing RAG chain with conversational memory...")
-            with get_openai_callback() as cb:
-                reply = await rag_chain.ainvoke(
+            chain = qa_prompt | robust_llm | StrOutputParser()
+
+            logger.info("Executing RAG chain with conversational memory and native fallback logic...")
+            try:
+                reply = await chain.ainvoke(
                     {"context": formatted_context, "chat_history": langchain_messages}
                 )
-
-                logger.info("OpenAI API call successful.")
-                logger.info(
-                    f"Token Usage - Prompt: {cb.prompt_tokens} | Completion: {cb.completion_tokens} | Total: {cb.total_tokens}"
-                )
+            except Exception as e:
+                logger.critical(f"ALL LLM PROVIDERS FAILED: {e!s}")
+                raise AppError(
+                    "I am temporarily unavailable due to high server load. Please try again in a few minutes.",
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                ) from e
 
             # 8. Save the AI Message
             db.add(
@@ -162,7 +155,7 @@ class ChatService:
             raise
         except ValueError as e:
             await db.rollback()
-            raise AppError(f"Invalid input: {e!s}", 400) from e
+            raise AppError(f"Invalid input: {e!s}", status.HTTP_400_BAD_REQUEST) from e
         except Exception as e:
             await db.rollback()
             logger.error(f"Unexpected Chat Error: {e!s}")

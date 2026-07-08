@@ -1,12 +1,12 @@
+import uuid
+
 from pydantic import BaseModel, Field
 
 
 class ChatRequestSchema(BaseModel):
-    user_id: str | None = Field(None, description="The user making the request.")
-    conversation_id: str | None = Field(None, description="The conversation ID. Omit to start a new chat.")
-    organization_id: str | None = Field(
-        None, description="Optional organization ID filter."
-    )
+    user_id: str = Field(..., description="The user making the request.")
+    organization_id: str = Field(..., description="The organization ID for tenant isolation and RAG filtering.")
+    conversation_id: uuid.UUID | None = Field(None, description="The conversation ID. Omit to start a new chat.")
     module: str | None = Field(None, description="Optional module filter.")
     message: str = Field(
         ...,

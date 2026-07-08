@@ -23,6 +23,10 @@ from app.exceptions.handlers import (
 )
 from app.routes.index import api_router
 from app.utils.logger import logger
+from langchain_core.globals import set_debug
+
+# Enable verbose LangChain terminal logs globally
+set_debug(True)
 
 # Initialize the secure package (Helmet equivalent)
 secure_headers = secure.Secure()
@@ -80,10 +84,12 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # 1. CORS Middleware
+# TODO: Replace allow_origins with the actual frontend domain before production deployment.
+# Using ["*"] without credentials for now since the frontend IP isn't finalized yet.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # Must be False when allow_origins=["*"] — browsers reject the combination
     allow_methods=["*"],
     allow_headers=["*"],
 )

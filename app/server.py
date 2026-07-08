@@ -13,5 +13,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=settings.port,  # Picks up PORT from .env
         reload=settings.env == "development",  # Auto-restart on code changes in dev
-        log_level="info" if settings.env == "development" else "warning",
+        log_level="debug" if settings.env == "development" else "warning",
     )

@@ -39,25 +39,26 @@ class VectorStore:
             PointStruct(id=idx, vector=vec, payload=pay)
             for idx, vec, pay in zip(ids, vectors, payloads, strict=True)
         ]
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: client.upsert(collection_name=cls.COLLECTION_NAME, points=points),
+        await asyncio.to_thread(
+            client.upsert, collection_name=cls.COLLECTION_NAME, points=points
         )
 
+
     @classmethod
-    def delete_by_document_id(cls, document_id: str):
-        """Delete old vectors for update/overwrite"""
+    async def delete_by_document_id(cls, document_id: str):
+        """Delete old vectors for update/overwrite (non-blocking)"""
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         client = cls.get_client()
-        client.delete(
-            collection_name=cls.COLLECTION_NAME,
-            points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="document_id", match=MatchValue(value=document_id)
-                    )
-                ]
-            ),
+        points_selector = Filter(
+            must=[
+                FieldCondition(
+                    key="metadata.document_id", match=MatchValue(value=document_id)
+                )
+            ]
         )
+        await asyncio.to_thread(
+            client.delete, collection_name=cls.COLLECTION_NAME, points_selector=points_selector
+        )
+        """Delete old vectors for update/overwrite"""
+

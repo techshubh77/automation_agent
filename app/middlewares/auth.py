@@ -1,7 +1,7 @@
-from fastapi import Depends
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.constants.status_codes import StatusCode
+
 from app.exceptions.custom_exceptions import AppError
 from app.utils.security import decode_access_token
 
@@ -25,7 +25,7 @@ def get_current_user(
     if not payload:
         raise AppError(
             message="Invalid or expired authentication token.",
-            status_code=StatusCode.UNAUTHORIZED,
+            status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
     return payload

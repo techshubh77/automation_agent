@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_db
+from app.config.rate_limiter import limiter
 from app.controllers.ingestion_controller import IngestionController
 from app.schemas.source_type_schema import SourceType
 
@@ -10,7 +11,9 @@ router = APIRouter(prefix="/ingestion", tags=["Ingestion"])
 
 
 @router.post("/document")
+@limiter.limit("20/hour")
 async def ingest_json(
+    request: Request,
     file: UploadFile = File(...),
     organization_id: str | None = Form(None),
     source_type: SourceType | None = Form(None),
