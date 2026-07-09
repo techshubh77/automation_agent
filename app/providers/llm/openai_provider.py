@@ -7,6 +7,7 @@ class OpenAIProvider:
     """
     Single Responsibility: This class only knows how to build and configure OpenAI models.
     """
+
     _client: ChatOpenAI | None = None
 
     @classmethod

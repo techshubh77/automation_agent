@@ -1,11 +1,13 @@
-from math import exp
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi.encoders import jsonable_encoder
-
 from app.exceptions.custom_exceptions import AppError
-from app.schemas.chat_schema import ChatRequestSchema, ChatResponseSchema, ConversationResponseSchema
+from app.schemas.chat_schema import (
+    ChatRequestSchema,
+    ChatResponseSchema,
+    ConversationResponseSchema,
+)
 from app.services.chat_service import ChatService
 from app.utils.logger import logger
 from app.utils.response import success_response
@@ -16,16 +18,21 @@ class ChatController:
     async def chat(data: ChatRequestSchema, db: AsyncSession) -> ChatResponseSchema:
         try:
             reply, conversation_id = await ChatService.chat(data, db)
-            response_data = ChatResponseSchema(conversation_id=str(conversation_id), reply=reply).model_dump()
-            return success_response(message="Chat processed successfully", data=response_data)
+            response_data = ChatResponseSchema(
+                conversation_id=str(conversation_id), reply=reply
+            ).model_dump()
+            return success_response(
+                message="Chat processed successfully", data=response_data
+            )
         except AppError:
             raise
         except Exception as e:
             logger.error(f"Error in ChatController.chat: {e!s}")
             raise AppError(
-                "Failed to process chat request due to an unexpected error", status.HTTP_500_INTERNAL_SERVER_ERROR
+                "Failed to process chat request due to an unexpected error",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             ) from e
-    
+
     @staticmethod
     async def index(org_id: str, db: AsyncSession):
         try:
@@ -33,11 +40,14 @@ class ChatController:
             formatted_history = jsonable_encoder(
                 [ConversationResponseSchema.model_validate(c) for c in history]
             )
-            return success_response(message="Chat history retrieved", data=formatted_history)
+            return success_response(
+                message="Chat history retrieved", data=formatted_history
+            )
         except AppError:
             raise
         except Exception as e:
             logger.error(f"Error in ChatController.index: {e!s}")
             raise AppError(
-                "Failed to get chat history due to an unexpected error", status.HTTP_500_INTERNAL_SERVER_ERROR
+                "Failed to get chat history due to an unexpected error",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             ) from e

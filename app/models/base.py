@@ -33,7 +33,10 @@ class TimestampMixin:
     """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, sort_order=9998
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        sort_order=9998,
     )
 
     updated_at: Mapped[datetime] = mapped_column(

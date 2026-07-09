@@ -23,4 +23,3 @@ async def chat_with_agent(
 @router.get("/history/{org_id}")
 async def index(org_id: str, db: AsyncSession = Depends(get_db)):
     return await ChatController.index(org_id, db)
-    

@@ -7,6 +7,7 @@ class GroqProvider:
     """
     Single Responsibility: This class only knows how to build and configure Groq models.
     """
+
     _client: ChatGroq | None = None
 
     @classmethod

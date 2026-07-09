@@ -6,8 +6,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from qdrant_client.http import models as rest
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config.settings import settings
 from app.exceptions.custom_exceptions import AppError
@@ -24,8 +24,8 @@ with open(PROMPTS_DIR / "system_prompt.txt", encoding="utf-8") as f:
 
 
 class ChatService:
-    @staticmethod
-    async def chat(data: ChatRequestSchema, db: AsyncSession) -> tuple[str, str]:
+    @classmethod
+    async def chat(cls, data: ChatRequestSchema, db: AsyncSession) -> tuple[str, str]:
         logger.info(f"Received chat request: {data.message}")
 
         try:
@@ -33,8 +33,10 @@ class ChatService:
             if not data.conversation_id:
                 logger.info("No conversation_id provided. Starting a new chat session.")
                 # Generate a short title from the first prompt (max 50 chars)
-                generated_title = data.message[:50] + ("..." if len(data.message) > 50 else "")
-                
+                generated_title = data.message[:50] + (
+                    "..." if len(data.message) > 50 else ""
+                )
+
                 new_conv = Conversation(
                     organization_id=data.organization_id,
                     user_id=data.user_id,
@@ -45,7 +47,9 @@ class ChatService:
                 conv_uuid = new_conv.id
             else:
                 logger.info(f"Resuming conversation {data.conversation_id}")
-                conv_uuid = data.conversation_id  # Already a UUID, validated by Pydantic schema
+                conv_uuid = (
+                    data.conversation_id
+                )  # Already a UUID, validated by Pydantic schema
                 # Verify conversation exists
                 existing = await db.execute(
                     select(Conversation).where(Conversation.id == conv_uuid)
@@ -67,55 +71,12 @@ class ChatService:
             await db.flush()
 
             # 3. Retrieve Memory (Sliding Window: Last 10 messages / 5 turns)
-            logger.info("Fetching last 10 messages for context window...")
-            result = await db.execute(
-                select(Message)
-                .where(Message.conversation_id == conv_uuid)
-                .order_by(Message.created_at.desc())
-                .limit(10)
+            langchain_messages = await cls._get_conversation_history(db, conv_uuid)
+
+            # 4. Execute Vector Search (RAG)
+            formatted_context = await cls._retrieve_context(
+                data.message, data.organization_id, data.module
             )
-            db_messages = list(result.scalars().all())
-            db_messages.reverse()  # Order chronologically for the LLM
-
-            # 4. Format memory for LangChain
-            langchain_messages = []
-            for msg in db_messages:
-                if msg.role == "human":
-                    langchain_messages.append(HumanMessage(content=msg.content))
-                elif msg.role == "ai":
-                    langchain_messages.append(AIMessage(content=msg.content))
-
-            # 5. Execute Vector Search (RAG)
-            filter_conditions = []
-            if data.organization_id:
-                filter_conditions.append(
-                    rest.FieldCondition(
-                        key="metadata.organization_id",
-                        match=rest.MatchValue(value=data.organization_id),
-                    )
-                )
-            if data.module:
-                filter_conditions.append(
-                    rest.FieldCondition(
-                        key="metadata.module", match=rest.MatchValue(value=data.module)
-                    )
-                )
-
-            search_kwargs = {
-                "k": settings.top_k_chunks,
-                "score_threshold": settings.similarity_threshold,
-            }
-            if filter_conditions:
-                search_kwargs["filter"] = rest.Filter(must=filter_conditions)
-
-            vector_store = LangchainStore.get_vector_store()
-            retriever = vector_store.as_retriever(
-                search_type="similarity_score_threshold", search_kwargs=search_kwargs
-            )
-
-            logger.info("Retrieving documents from Qdrant with metadata filters...")
-            docs = await retriever.ainvoke(data.message)
-            formatted_context = "\n\n---\n\n".join(doc.page_content for doc in docs)
 
             # 6. Build the Chat Prompt with Memory
             qa_prompt = ChatPromptTemplate.from_messages(
@@ -131,7 +92,9 @@ class ChatService:
 
             chain = qa_prompt | robust_llm | StrOutputParser()
 
-            logger.info("Executing RAG chain with conversational memory and native fallback logic...")
+            logger.info(
+                "Executing RAG chain with conversational memory and native fallback logic..."
+            )
             try:
                 reply = await chain.ainvoke(
                     {"context": formatted_context, "chat_history": langchain_messages}
@@ -165,7 +128,8 @@ class ChatService:
             await db.rollback()
             logger.error(f"Unexpected Chat Error: {e!s}")
             raise AppError(
-                "An unexpected error occurred during chat processing.", status.HTTP_500_INTERNAL_SERVER_ERROR
+                "An unexpected error occurred during chat processing.",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             ) from e
 
     @staticmethod
@@ -178,5 +142,59 @@ class ChatService:
             .order_by(Conversation.created_at.desc())
         )
         result = await db.execute(stmt)
-        conversations = result.scalars().all()
-        return conversations
+        return result.scalars().all()
+
+    @staticmethod
+    async def _get_conversation_history(db: AsyncSession, conv_uuid) -> list:
+        logger.info("Fetching last 10 messages for context window...")
+        result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv_uuid)
+            .order_by(Message.created_at.desc())
+            .limit(10)
+        )
+        db_messages = list(result.scalars().all())
+        db_messages.reverse()
+
+        langchain_messages = []
+        for msg in db_messages:
+            if msg.role == "human":
+                langchain_messages.append(HumanMessage(content=msg.content))
+            elif msg.role == "ai":
+                langchain_messages.append(AIMessage(content=msg.content))
+        return langchain_messages
+
+    @staticmethod
+    async def _retrieve_context(
+        message: str, organization_id: str | None, module: str | None
+    ) -> str:
+        filter_conditions = []
+        if organization_id:
+            filter_conditions.append(
+                rest.FieldCondition(
+                    key="metadata.organization_id",
+                    match=rest.MatchValue(value=organization_id),
+                )
+            )
+        if module:
+            filter_conditions.append(
+                rest.FieldCondition(
+                    key="metadata.module", match=rest.MatchValue(value=module)
+                )
+            )
+
+        search_kwargs = {
+            "k": settings.top_k_chunks,
+            "score_threshold": settings.similarity_threshold,
+        }
+        if filter_conditions:
+            search_kwargs["filter"] = rest.Filter(must=filter_conditions)
+
+        vector_store = LangchainStore.get_vector_store()
+        retriever = vector_store.as_retriever(
+            search_type="similarity_score_threshold", search_kwargs=search_kwargs
+        )
+
+        logger.info("Retrieving documents from Qdrant with metadata filters...")
+        docs = await retriever.ainvoke(message)
+        return "\n\n---\n\n".join(doc.page_content for doc in docs)

@@ -42,5 +42,6 @@ def global_exception_handler(request: Request, exc: Exception):
     logger.exception(f"Unhandled Exception: {exc!s} on {request.url}")
     # In production, you might want to obscure the message like Node.js does
     return error_response(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, message="Something went wrong!"
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        message="Something went wrong!",
     )

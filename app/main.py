@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from langchain_core.globals import set_debug
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -23,7 +24,6 @@ from app.exceptions.handlers import (
 )
 from app.routes.index import api_router
 from app.utils.logger import logger
-from langchain_core.globals import set_debug
 
 # Enable verbose LangChain terminal logs globally
 set_debug(True)
@@ -84,12 +84,10 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # 1. CORS Middleware
-# TODO: Replace allow_origins with the actual frontend domain before production deployment.
-# Using ["*"] without credentials for now since the frontend IP isn't finalized yet.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # Must be False when allow_origins=["*"] — browsers reject the combination
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

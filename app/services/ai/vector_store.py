@@ -43,7 +43,6 @@ class VectorStore:
             client.upsert, collection_name=cls.COLLECTION_NAME, points=points
         )
 
-
     @classmethod
     async def delete_by_document_id(cls, document_id: str):
         """Delete old vectors for update/overwrite (non-blocking)"""
@@ -58,7 +57,8 @@ class VectorStore:
             ]
         )
         await asyncio.to_thread(
-            client.delete, collection_name=cls.COLLECTION_NAME, points_selector=points_selector
+            client.delete,
+            collection_name=cls.COLLECTION_NAME,
+            points_selector=points_selector,
         )
         """Delete old vectors for update/overwrite"""
-
