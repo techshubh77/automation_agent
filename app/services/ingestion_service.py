@@ -45,14 +45,14 @@ class IngestionService:
     ):
         logger.info(f"Starting ingestion process for file: {file.filename}")
 
-        #  STEP 1-2: Validate source_type and file type
+        # Validate source_type and file type
         file_config, file_extension = cls._validate_file(file, source_type)
 
         try:
-            #  STEP 3: Read the file into memory
+            # Read the file into memory
             file_bytes = await file.read()
 
-            #  STEP 4: Enforce maximum file size
+            # Enforce maximum file size
             if len(file_bytes) == 0:
                 raise AppError("Uploaded file is empty.", status.HTTP_400_BAD_REQUEST)
             if len(file_bytes) > MAX_FILE_SIZE:
@@ -62,18 +62,18 @@ class IngestionService:
                 )
             logger.info(f"File read successfully. Size: {len(file_bytes)} bytes.")
 
-            #  STEP 5: Hash the file content for deduplication
+            # Hash the file content for deduplication
             # If the same file is uploaded twice (even with a different name),
             # the hash will be identical, and we can reject it in the next step.
             file_hash = hashlib.sha256(file_bytes).hexdigest()
             logger.info(f"File hashed successfully. Hash: {file_hash[:16]}...")
 
-            #  STEP 5-6: Check database for duplicates and existing documents to overwrite
+            #  Check database for duplicates and existing documents to overwrite
             existing_doc = await cls._check_database_for_duplicates(
                 db, organization_id, module, file_hash
             )
 
-            #  STEP 7: Parse the file into plain text
+            # Parse the file into plain text
             # For .json: JsonParser.parse_file_content() flattens nested JSON
             #            into readable "key -> subkey: value" text lines.
             # For .md:   MarkdownParser.parse_file_content() simply decodes
@@ -84,12 +84,12 @@ class IngestionService:
                 f"Parsed {file_extension} file into text. Length: {len(parsed_text)} characters."
             )
 
-            #  STEP 8: Chunk the text
+            # Chunk the text
             logger.info("Chunking text for AI embedding...")
             chunks = TextChunker.chunk_text(parsed_text)
             logger.info(f"Generated {len(chunks)} chunks.")
 
-            #  STEP 9: Embed the chunks via OpenAI (RISKIEST STEP — must happen before ANY deletion)
+            # Embed the chunks via OpenAI (RISKIEST STEP — must happen before ANY deletion)
             # If this fails, we have not touched Postgres or Qdrant yet, so no data is lost.
             vectors = []
             if chunks:
@@ -133,7 +133,7 @@ class IngestionService:
                 document_id_str = str(new_document.id)
 
             if chunks and vectors:
-                #  STEP 10: Store vectors in Qdrant
+                # Store vectors in Qdrant
                 await cls._upsert_to_qdrant(
                     chunks,
                     vectors,

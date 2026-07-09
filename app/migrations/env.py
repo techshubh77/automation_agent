@@ -21,6 +21,7 @@ from app.models.base import Base
 from app.models.document import Document  # Explicitly import models for Alembic
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.organization import Organization
 
 target_metadata = Base.metadata
 

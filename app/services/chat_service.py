@@ -22,7 +22,6 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 with open(PROMPTS_DIR / "system_prompt.txt", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 
-
 class ChatService:
     @classmethod
     async def chat(cls, data: ChatRequestSchema, db: AsyncSession) -> tuple[str, str]:

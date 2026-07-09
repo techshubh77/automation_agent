@@ -20,7 +20,7 @@ logger.add(
 
 # Add file transport (matches Winston fileTransport)
 logger.add(
-    "application.log",
+    "logs/application.log",
     format="{time:DD-MM-YYYY HH:mm:ss} [{level}]: {message}",
     rotation="10 MB",  # Automatically rotates log files when they reach 10MB
     retention="10 days",  # Keep logs for 10 days
