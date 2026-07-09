@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     groq_chat_model: str = "llama-3.3-70b-versatile"
 
+    # Redis Settings
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+
+    # Mail Settings
+    mail_host: str = "sandbox.smtp.mailtrap.io"
+    mail_port: int = 2525
+    mail_username: str | None = None
+    mail_password: str | None = None
+    mail_from_email: str = "noreply@knitly.ai"
+    mail_to_email: str = "admin@knitly.ai"
+
     model_config = SettingsConfigDict(
         env_file=".env", case_sensitive=False, env_file_encoding="utf-8", extra="ignore"
     )

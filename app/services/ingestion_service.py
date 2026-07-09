@@ -1,10 +1,14 @@
 import hashlib
 import uuid
+import os
+import aiofiles
 
 from fastapi import UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from arq import create_pool
 
+from app.config.redis import redis_settings
 from app.exceptions.custom_exceptions import AppError
 from app.models.document import Document
 from app.schemas.source_type_schema import SourceType
@@ -34,6 +38,85 @@ SUPPORTED_FILE_TYPES = {
 
 
 class IngestionService:
+    @classmethod
+    async def enqueue_file_ingestion(
+        cls,
+        db: AsyncSession,
+        file: UploadFile,
+        organization_id: str | None = None,
+        source_type: SourceType | None = None,
+        module: str | None = None,
+    ) -> dict:
+        logger.info(f"Enqueuing ingestion process for file: {file.filename}")
+
+        # 1. Validate source_type and file type
+        file_config, file_extension = cls._validate_file(file, source_type)
+
+        # 2. Save temporary upload file
+        temp_dir = "shared_storage"
+        os.makedirs(temp_dir, exist_ok=True)
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        temp_filepath = os.path.join(temp_dir, unique_filename)
+
+        # Read the file and write to temporary location
+        file_bytes = await file.read()
+        
+        # Enforce maximum file size
+        if len(file_bytes) == 0:
+            raise AppError("Uploaded file is empty.", status.HTTP_400_BAD_REQUEST)
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise AppError(
+                "File size exceeds the 10MB limit.",
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        # Hash file to check for exact duplicate before enqueuing
+        file_hash = hashlib.sha256(file_bytes).hexdigest()
+        existing_doc = await cls._check_database_for_duplicates(
+            db, organization_id, module, file_hash
+        )
+
+        async with aiofiles.open(temp_filepath, "wb") as f:
+            await f.write(file_bytes)
+
+        # 3. Create document record in database with "pending" status
+        if existing_doc:
+            # Overwrite path: update status to pending and reuse existing UUID
+            existing_doc.status = "pending"
+            existing_doc.filename = file.filename
+            existing_doc.file_type = file_config["label"]
+            existing_doc.file_hash = file_hash
+            document_id_str = str(existing_doc.id)
+            await db.commit()
+            logger.info(f"Updated existing document {document_id_str} status to pending.")
+        else:
+            new_doc = Document(
+                organization_id=organization_id,
+                filename=file.filename,
+                file_hash=file_hash,
+                file_type=file_config["label"],
+                source_type=source_type,
+                module=module,
+                status="pending",
+            )
+            db.add(new_doc)
+            await db.flush()
+            document_id_str = str(new_doc.id)
+            await db.commit()
+            logger.info(f"Created new document {document_id_str} record in pending state.")
+
+        # 4. Enqueue task to Redis broker
+        redis_pool = await create_pool(redis_settings)
+        await redis_pool.enqueue_job(
+            "ingest_document_job",
+            doc_id=document_id_str,
+            filepath=temp_filepath,
+            _job_id=document_id_str  # Idempotency using DB UUID
+        )
+        logger.info(f"Job successfully enqueued to Redis with ID: {document_id_str}")
+
+        return {"document_id": document_id_str, "status": "pending"}
+
     @classmethod
     async def ingest_document(
         cls,
@@ -221,35 +304,35 @@ class IngestionService:
         module: str | None,
         file_hash: str,
     ) -> Document | None:
-        if organization_id and module:
-            exact_duplicate = await db.execute(
-                select(Document).where(
-                    Document.organization_id == organization_id,
-                    Document.module == module,
-                    Document.file_hash == file_hash,
-                )
-            )
-            if exact_duplicate.scalar_one_or_none():
-                raise AppError(
-                    "This exact file is already active in this module.",
-                    status.HTTP_409_CONFLICT,
-                )
+        # 1. Exact Duplicate Check (checks same file content)
+        dup_query = select(Document).where(Document.file_hash == file_hash)
+        if organization_id:
+            dup_query = dup_query.where(Document.organization_id == organization_id)
+        if module:
+            dup_query = dup_query.where(Document.module == module)
 
-            logger.info(
-                f"Checking for existing document in org [{organization_id}] module [{module}]"
+        exact_duplicate = await db.execute(dup_query)
+        if exact_duplicate.scalars().first():
+            raise AppError(
+                "This exact file is already active in this module.",
+                status.HTTP_409_CONFLICT,
             )
-            existing_result = await db.execute(
-                select(Document).where(
-                    Document.organization_id == organization_id,
-                    Document.module == module,
-                )
-            )
-            existing_doc = existing_result.scalar_one_or_none()
+
+        # 2. Existing File check for Overwrite (checks if a file exists in the slot to replace it)
+        # We only overwrite if a specific slot (module + org, or at least module) is targeted
+        if module:
+            existing_query = select(Document).where(Document.module == module)
+            if organization_id:
+                existing_query = existing_query.where(Document.organization_id == organization_id)
+                
+            existing_result = await db.execute(existing_query)
+            existing_doc = existing_result.scalars().first()
             if existing_doc:
                 logger.info(
-                    f"Found existing document (ID: {existing_doc.id}). Will overwrite after embedding succeeds."
+                    f"Found existing document (ID: {existing_doc.id}). Will overwrite in background."
                 )
             return existing_doc
+
         return None
 
     @staticmethod

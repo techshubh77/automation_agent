@@ -18,7 +18,7 @@ class IngestionController:
         module: str | None = None,
     ):
         try:
-            result = await IngestionService.ingest_document(
+            result = await IngestionService.enqueue_file_ingestion(
                 db=db,
                 file=file,
                 organization_id=organization_id,
@@ -27,9 +27,9 @@ class IngestionController:
             )
 
             return success_response(
-                message="File ingested successfully",
+                message="File upload accepted. Processing started in background.",
                 data=result,
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_202_ACCEPTED,
             )
         except AppError:
             # Already a clean app error, let the global handler manage it

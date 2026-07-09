@@ -76,3 +76,7 @@ dump.rdb
 # SONARQUBE
 .sonar/
 .scannerwork/
+
+
+graphify-out/
+ Guides/
