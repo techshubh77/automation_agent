@@ -6,6 +6,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from qdrant_client.http import models as rest
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
@@ -31,9 +32,13 @@ class ChatService:
             # 1. Manage Conversation Session
             if not data.conversation_id:
                 logger.info("No conversation_id provided. Starting a new chat session.")
+                # Generate a short title from the first prompt (max 50 chars)
+                generated_title = data.message[:50] + ("..." if len(data.message) > 50 else "")
+                
                 new_conv = Conversation(
                     organization_id=data.organization_id,
                     user_id=data.user_id,
+                    title=generated_title,
                 )
                 db.add(new_conv)
                 await db.flush()
@@ -160,5 +165,18 @@ class ChatService:
             await db.rollback()
             logger.error(f"Unexpected Chat Error: {e!s}")
             raise AppError(
-                "An unexpected error occurred during chat processing.", 500
+                "An unexpected error occurred during chat processing.", status.HTTP_500_INTERNAL_SERVER_ERROR
             ) from e
+
+    @staticmethod
+    async def index(org_id: str, db: AsyncSession):
+        """Retrieve chat history (conversations and their messages) for an organization."""
+        stmt = (
+            select(Conversation)
+            .where(Conversation.organization_id == org_id)
+            .options(selectinload(Conversation.messages))
+            .order_by(Conversation.created_at.desc())
+        )
+        result = await db.execute(stmt)
+        conversations = result.scalars().all()
+        return conversations

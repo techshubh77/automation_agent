@@ -22,7 +22,7 @@ class UUIDMixin:
     """
 
     id: Mapped[uuid.UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid4, index=True
+        primary_key=True, default=uuid.uuid4, index=True, sort_order=-1
     )
 
 
@@ -33,7 +33,7 @@ class TimestampMixin:
     """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False, sort_order=9998
     )
 
     updated_at: Mapped[datetime] = mapped_column(
@@ -41,6 +41,7 @@ class TimestampMixin:
         server_default=func.now(),
         onupdate=func.now(),  # Automatically updates on row modification
         nullable=False,
+        sort_order=9999,
     )
 
 

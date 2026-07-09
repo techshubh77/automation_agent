@@ -1,4 +1,4 @@
-from fastapi import UploadFile
+from fastapi import UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.custom_exceptions import AppError
@@ -27,13 +27,13 @@ class IngestionController:
             )
 
             return success_response(
-                message="File ingested successfully", data=result, status_code=200
+                message="File ingested successfully", data=result, status_code=status.HTTP_200_OK
             )
         except AppError:
             # Already a clean app error, let the global handler manage it
             raise
         except Exception as e:
-            logger.error(f"Error in IngestionController.ingest_json: {e!s}")
+            logger.error(f"Error in IngestionController.ingest_document: {e!s}")
             raise AppError(
-                "Failed to ingest document due to an unexpected error", 500
+                "Failed to ingest document due to an unexpected error", status.HTTP_500_INTERNAL_SERVER_ERROR
             ) from e

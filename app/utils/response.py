@@ -1,10 +1,11 @@
 from typing import Any
 
+from fastapi import status
 from fastapi.responses import JSONResponse
 
 
 def success_response(
-    status_code: int = 200, message: str = "Success", data: Any | None = None
+    status_code: int = status.HTTP_200_OK, message: str = "Success", data: Any | None = None
 ) -> JSONResponse:
     """Utility to send a standardized success response"""
     return JSONResponse(
@@ -14,13 +15,13 @@ def success_response(
 
 
 def error_response(
-    status_code: int = 500, message: str = "Error", errors: Any | None = None
+    status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR, message: str = "Error", errors: Any | None = None
 ) -> JSONResponse:
     """Utility to send a standardized error response"""
     return JSONResponse(
         status_code=status_code,
         content={
-            "status": "error" if status_code >= 500 else "fail",
+            "status": "error" if status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR else "fail",
             "message": message,
             "errors": errors,
         },

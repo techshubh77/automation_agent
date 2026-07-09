@@ -47,7 +47,7 @@ class IngestionService:
         if source_type is None:
             raise AppError(
                 f"source_type is required. Allowed values: {[e.value for e in SourceType]}",
-                400,
+                status.HTTP_400_BAD_REQUEST,
             )
 
         #  STEP 2: Detect and validate the file type
@@ -62,7 +62,7 @@ class IngestionService:
             logger.warning(f"Unsupported file type uploaded: {file.filename}")
             raise AppError(
                 f"Unsupported file type. Accepted formats: {list(SUPPORTED_FILE_TYPES.keys())}",
-                400,
+                status.HTTP_400_BAD_REQUEST,
             )
 
         # Look up the configuration for this file type from our lookup table above.
@@ -77,7 +77,7 @@ class IngestionService:
             raise AppError(
                 f"Invalid Content-Type for a {file_extension} file. "
                 f"Expected: {file_config['mime']}",
-                400,
+                status.HTTP_400_BAD_REQUEST,
             )
 
         try:

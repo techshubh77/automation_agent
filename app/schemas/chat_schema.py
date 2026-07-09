@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ChatRequestSchema(BaseModel):
@@ -17,5 +18,29 @@ class ChatRequestSchema(BaseModel):
 
 
 class ChatResponseSchema(BaseModel):
-    reply: str
     conversation_id: str
+    reply: str
+
+
+class MessageResponseSchema(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    meta_data: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationResponseSchema(BaseModel):
+    id: uuid.UUID
+    organization_id: str | None
+    user_id: str | None
+    title: str | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[MessageResponseSchema] = []
+
+    model_config = ConfigDict(from_attributes=True)
