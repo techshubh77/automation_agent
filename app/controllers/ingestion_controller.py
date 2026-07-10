@@ -13,6 +13,7 @@ class IngestionController:
     async def ingest_document(
         file: UploadFile,
         db: AsyncSession,
+        redis_pool,
         organization_id: str | None = None,
         source_type: SourceType | None = None,
         module: str | None = None,
@@ -20,6 +21,7 @@ class IngestionController:
         try:
             result = await IngestionService.enqueue_file_ingestion(
                 db=db,
+                redis_pool=redis_pool,
                 file=file,
                 organization_id=organization_id,
                 source_type=source_type,

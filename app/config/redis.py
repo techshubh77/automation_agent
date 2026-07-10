@@ -1,4 +1,5 @@
 from arq.connections import RedisSettings
+
 from app.config.settings import settings
 
 redis_settings = RedisSettings(

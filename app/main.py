@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 import secure
+from arq import create_pool
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config.database import engine
 from app.config.rate_limiter import limiter
+from app.config.redis import redis_settings
 from app.config.settings import settings
 from app.exceptions.custom_exceptions import AppError
 from app.exceptions.handlers import (
@@ -57,10 +59,24 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("OPENAI_API_KEY is required to start this application.")
     logger.info("OpenAI API key validated successfully.")
 
+    # Initialize Global Redis Pool for background tasks
+    try:
+        app.state.redis_pool = await create_pool(redis_settings)
+        logger.info("Global Redis pool for background tasks initialized.")
+    except Exception as e:
+        logger.critical(f"Failed to initialize Redis pool: {e}")
+        raise
+
     yield  # Application runs here
 
     # Shutdown events
     logger.info("Shutting down application...")
+
+    if hasattr(app.state, "redis_pool"):
+        app.state.redis_pool.close()
+        await app.state.redis_pool.wait_closed()
+        logger.info("Redis pool closed.")
+
     await engine.dispose()
     logger.info("Database connections closed.")
 

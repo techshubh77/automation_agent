@@ -1,11 +1,11 @@
+import uuid
 from pathlib import Path
 
 from fastapi import status
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from qdrant_client.http import models as rest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,8 +13,10 @@ from app.config.settings import settings
 from app.exceptions.custom_exceptions import AppError
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.organization import Organization
+from app.models.token_usage import TokenUsage
 from app.providers.llm.factory import LLMFactory
-from app.schemas.chat_schema import ChatRequestSchema
+from app.schemas.chat_schema import AgentResponse, ChatRequestSchema
 from app.services.ai.langchain_store import LangchainStore
 from app.utils.logger import logger
 
@@ -24,7 +26,9 @@ with open(PROMPTS_DIR / "system_prompt.txt", encoding="utf-8") as f:
 
 class ChatService:
     @classmethod
-    async def chat(cls, data: ChatRequestSchema, db: AsyncSession) -> tuple[str, str]:
+    async def chat(
+        cls, data: ChatRequestSchema, db: AsyncSession
+    ) -> tuple[AgentResponse, str]:
         logger.info(f"Received chat request: {data.message}")
 
         try:
@@ -70,7 +74,10 @@ class ChatService:
             await db.flush()
 
             # 3. Retrieve Memory (Sliding Window: Last 10 messages / 5 turns)
-            langchain_messages = await cls._get_conversation_history(db, conv_uuid)
+            if not data.conversation_id:
+                langchain_messages = [HumanMessage(content=data.message)]
+            else:
+                langchain_messages = await cls._get_conversation_history(db, conv_uuid)
 
             # 4. Execute Vector Search (RAG)
             formatted_context = await cls._retrieve_context(
@@ -89,14 +96,23 @@ class ChatService:
             logger.info("Retrieving robust LLM from Factory...")
             robust_llm = LLMFactory.get_robust_llm()
 
-            chain = qa_prompt | robust_llm | StrOutputParser()
+            structured_llm = robust_llm.with_structured_output(
+                AgentResponse, include_raw=True
+            )
+            chain = qa_prompt | structured_llm
 
             logger.info(
-                "Executing RAG chain with conversational memory and native fallback logic..."
+                "Executing RAG chain with conversational memory and structured output..."
             )
             try:
-                reply = await chain.ainvoke(
+                response = await chain.ainvoke(
                     {"context": formatted_context, "chat_history": langchain_messages}
+                )
+                agent_response: AgentResponse = response["parsed"]
+
+                # Log token usage
+                await cls._track_token_usage(
+                    db, response["raw"], data.organization_id, conv_uuid
                 )
             except Exception as e:
                 logger.critical(f"ALL LLM PROVIDERS FAILED: {e!s}")
@@ -106,16 +122,25 @@ class ChatService:
                 ) from e
 
             # 8. Save the AI Message
+            meta_data = {
+                "flag": agent_response.flag,
+                "payload": agent_response.payload.model_dump()
+                if agent_response.payload
+                else None,
+                "missing_fields": agent_response.missing_fields,
+                "payload_example": agent_response.payload_example,
+            }
             db.add(
                 Message(
                     conversation_id=conv_uuid,
                     role="ai",
-                    content=reply,
+                    content=agent_response.reply,
+                    meta_data=meta_data,
                 )
             )
             await db.commit()
 
-            return reply, str(conv_uuid)
+            return agent_response, str(conv_uuid)
 
         except AppError:
             await db.rollback()
@@ -162,6 +187,48 @@ class ChatService:
             elif msg.role == "ai":
                 langchain_messages.append(AIMessage(content=msg.content))
         return langchain_messages
+
+    @classmethod
+    async def _track_token_usage(
+        cls, db: AsyncSession, raw_msg, organization_id: str, conv_uuid: uuid.UUID
+    ):
+        input_tok, output_tok, total_tok = 0, 0, 0
+        if hasattr(raw_msg, "usage_metadata") and raw_msg.usage_metadata:
+            usage = raw_msg.usage_metadata
+            input_tok = usage.get("input_tokens", 0)
+            output_tok = usage.get("output_tokens", 0)
+            total_tok = usage.get("total_tokens", 0)
+            logger.info(
+                f"Token Usage - Input: {input_tok}, Output: {output_tok}, Total: {total_tok}"
+            )
+        elif (
+            hasattr(raw_msg, "response_metadata")
+            and "token_usage" in raw_msg.response_metadata
+        ):
+            usage = raw_msg.response_metadata["token_usage"]
+            input_tok = usage.get("prompt_tokens", 0)
+            output_tok = usage.get("completion_tokens", 0)
+            total_tok = usage.get("total_tokens", 0)
+            logger.info(
+                f"Token Usage - Input: {input_tok}, Output: {output_tok}, Total: {total_tok}"
+            )
+
+        if total_tok > 0:
+            db.add(
+                TokenUsage(
+                    organization_id=organization_id,
+                    conversation_id=conv_uuid,
+                    operation_type="chat",
+                    input_tokens=input_tok,
+                    output_tokens=output_tok,
+                    total_tokens=total_tok,
+                )
+            )
+            await db.execute(
+                update(Organization)
+                .where(Organization.org_id == organization_id)
+                .values(token_used=Organization.token_used + total_tok)
+            )
 
     @staticmethod
     async def _retrieve_context(

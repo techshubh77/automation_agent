@@ -17,9 +17,16 @@ class ChatController:
     @staticmethod
     async def chat(data: ChatRequestSchema, db: AsyncSession) -> ChatResponseSchema:
         try:
-            reply, conversation_id = await ChatService.chat(data, db)
+            agent_response, conversation_id = await ChatService.chat(data, db)
             response_data = ChatResponseSchema(
-                conversation_id=str(conversation_id), reply=reply
+                conversation_id=str(conversation_id),
+                reply=agent_response.reply,
+                flag=agent_response.flag,
+                payload=agent_response.payload.model_dump()
+                if agent_response.payload
+                else None,
+                missing_fields=agent_response.missing_fields,
+                payload_example=agent_response.payload_example,
             ).model_dump()
             return success_response(
                 message="Chat processed successfully", data=response_data

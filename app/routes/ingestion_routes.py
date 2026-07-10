@@ -23,6 +23,7 @@ async def ingest_json(
     return await IngestionController.ingest_document(
         file=file,
         db=db,
+        redis_pool=request.app.state.redis_pool,
         organization_id=organization_id,
         source_type=source_type,
         module=module,

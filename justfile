@@ -2,6 +2,10 @@
 dev:
     uv run python -m app.server
 
+# Start the background worker for document ingestion tasks
+worker:
+    uv run arq worker.doc_ingestion_worker.WorkerSettings
+
 # Auto-generate a new database migration
 # Usage: just migration "added users table"
 migration msg="auto":
