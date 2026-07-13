@@ -10,7 +10,9 @@ class ChatRequestSchema(BaseModel):
         ..., description="The organization ID for tenant isolation and RAG filtering."
     )
     conversation_id: uuid.UUID | None = Field(
-        None, description="The conversation ID. Omit to start a new chat."
+        default=None,
+        description="The conversation ID. Omit to start a new chat.",
+        json_schema_extra={"example": None}
     )
     module: str | None = Field(None, description="Optional module filter.")
     message: str = Field(
@@ -33,26 +35,27 @@ class AgentActionPayload(BaseModel):
 
 class AgentResponse(BaseModel):
     reply: str = Field(
-        description="The conversational reply to the user. If fields are missing, politely ask for them."
+        description="Your conversational response to the user. In Stage 3 (flag=true), say a short confirmation like 'Done! Creating your ticket now.'"
     )
     flag: bool = Field(
-        description="True ONLY if the user has provided all required information and the payload is ready to be sent to Laravel."
+        description="True ONLY in Stage 3, when the user has just confirmed the preview and the action is being executed."
+    )
+    preview: bool = Field(
+        description="MUST be true if missing_fields is empty [] (Stage 2). MUST be false if there are missing fields (Stage 1) or if the user confirmed (Stage 3). If you have all fields, you are FORBIDDEN from setting this to false."
     )
 
-    # When flag is True:
+    # Populated ONLY in Stage 3:
     payload: AgentActionPayload | None = Field(
         default=None,
-        description="The complete payload containing endpoint, method, and data to execute the action.",
+        description="The final action payload with endpoint, method, and data. Populated ONLY when flag=true.",
     )
 
-    # When flag is False:
-    missing_fields: list[str] | None = Field(
-        default=None,
-        description="A simple list of short strings describing the missing fields (e.g. 'title: Short summary of the issue').",
+    # Populated in Stage 1 and Stage 2:
+    missing_fields: list[str] = Field(
+        description="Fields that are truly missing and cannot be inferred. Empty list [] in Stage 2 and Stage 3. NEVER include 'title' or 'description' if the user provided any descriptive context at all.",
     )
-    payload_example: dict | None = Field(
-        default=None,
-        description="A complete example of just the DATA payload (do NOT include endpoint or method here, only the fields the user needs to provide).",
+    payload_example: dict = Field(
+        description="The data dict showing what you have inferred or extracted so far. In Stage 1, show partial data already inferred. In Stage 2, show the complete confirmed data. Empty dict {} in Stage 3 and Mode A (pure conversation).",
     )
 
 
@@ -60,6 +63,7 @@ class ChatResponseSchema(BaseModel):
     conversation_id: str
     reply: str
     flag: bool = False
+    preview: bool = False
     payload: dict | None = None
     missing_fields: list[str] | None = None
     payload_example: dict | None = None

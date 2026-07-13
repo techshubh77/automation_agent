@@ -49,6 +49,7 @@ class VectorStore:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         client = cls.get_client()
+        cls.init_collection()
         points_selector = Filter(
             must=[
                 FieldCondition(

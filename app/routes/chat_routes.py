@@ -21,5 +21,16 @@ async def chat_with_agent(
 
 
 @router.get("/history/{org_id}")
-async def index(org_id: str, db: AsyncSession = Depends(get_db)):
-    return await ChatController.index(org_id, db)
+async def index(
+    org_id: str, 
+    search: str | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    return await ChatController.index(org_id, db, search, limit, offset)
+
+
+@router.get("/conversation/{conversation_id}")
+async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    return await ChatController.get_conversation(conversation_id, db)

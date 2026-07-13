@@ -59,6 +59,13 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("OPENAI_API_KEY is required to start this application.")
     logger.info("OpenAI API key validated successfully.")
 
+    # Validate Groq API Key (used as fallback provider — missing key means fallback is unavailable)
+    if not settings.groq_api_key:
+        logger.warning(
+            "GROQ_API_KEY is not set. Groq fallback provider will be unavailable. "
+            "All LLM traffic will rely solely on OpenAI."
+        )
+
     # Initialize Global Redis Pool for background tasks
     try:
         app.state.redis_pool = await create_pool(redis_settings)
@@ -100,12 +107,14 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # 1. CORS Middleware
+# For an internal HRMS tool, restrict allowed origins to known internal domains.
+# In production, set ALLOWED_ORIGINS in environment config instead of hardcoding.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # 2. GZip Compression Middleware

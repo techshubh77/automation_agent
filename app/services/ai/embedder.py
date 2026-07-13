@@ -15,11 +15,12 @@ class Embedder:
         return cls._client
 
     @classmethod
-    async def embed_documents(cls, texts: list[str]) -> list[list[float]]:
+    async def embed_documents(cls, texts: list[str]) -> tuple[list[list[float]], int]:
         client = cls.get_client()
         response = await client.embeddings.create(
             input=texts, model=settings.openai_embedding_model
         )
 
         embeddings = sorted(response.data, key=lambda x: x.index)
-        return [emb.embedding for emb in embeddings]
+        tokens = response.usage.prompt_tokens if response.usage else 0
+        return [emb.embedding for emb in embeddings], tokens

@@ -22,7 +22,7 @@ from app.models.document import Document  # Explicitly import models for Alembic
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.organization import Organization
-from app.models.token_usage import TokenUsage
+from app.models.credit_usage import CreditUsage
 
 target_metadata = Base.metadata
 
