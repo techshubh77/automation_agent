@@ -1,4 +1,5 @@
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 
 from app.config.settings import settings
 from app.providers.llm.groq_provider import GroqProvider
@@ -24,7 +25,20 @@ class LLMFactory:
         return primary_llm.with_fallbacks([backup_llm])
 
     @staticmethod
-    def get_primary_model_info() -> dict:
+    def get_gpt_4o_mini() -> BaseChatModel:
+        """
+        Returns a fast, inexpensive LLM (gpt-4o-mini) for lightweight background tasks
+        like query rewriting. Configured with a very short timeout.
+        """
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=settings.openai_api_key,
+            temperature=0.0,
+            max_retries=0,
+        )
+
+    @staticmethod
+    def get_primary_model_info() -> dict:   
         """
         Returns information about the primary LLM used by this factory.
         Used by the Pricing Engine to calculate costs.

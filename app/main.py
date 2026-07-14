@@ -80,8 +80,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application...")
 
     if hasattr(app.state, "redis_pool"):
-        app.state.redis_pool.close()
-        await app.state.redis_pool.wait_closed()
+        await app.state.redis_pool.aclose()
         logger.info("Redis pool closed.")
 
     await engine.dispose()

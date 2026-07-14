@@ -10,7 +10,7 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 @router.post("/")
-@limiter.limit("5/minute")
+@limiter.limit("50/minute")
 async def chat_with_agent(
     request: Request, data: ChatRequestSchema, db: AsyncSession = Depends(get_db)
 ):

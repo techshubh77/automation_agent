@@ -13,7 +13,10 @@ class LangchainStore:
         if cls._vector_store is None:
             client = VectorStore.get_client()
             embeddings = OpenAIEmbeddings(
-                api_key=settings.openai_api_key, model=settings.openai_embedding_model
+                api_key=settings.openai_api_key, 
+                model=settings.openai_embedding_model,
+                timeout=10.0,
+                max_retries=3
             )
             cls._vector_store = QdrantVectorStore(
                 client=client,

@@ -16,7 +16,7 @@ class GroqProvider:
             cls._client = ChatGroq(
                 model=settings.groq_chat_model,
                 api_key=settings.groq_api_key,
-                temperature=0.7,
+                temperature=0.3,
                 timeout=15.0,
                 max_retries=2,
             )

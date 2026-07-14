@@ -16,7 +16,7 @@ class OpenAIProvider:
             cls._client = ChatOpenAI(
                 model=settings.openai_chat_model,
                 api_key=settings.openai_api_key,
-                temperature=0.7,
+                temperature=0.3,
                 timeout=15.0,
                 max_retries=2,
             )

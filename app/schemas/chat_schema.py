@@ -25,7 +25,7 @@ class ChatRequestSchema(BaseModel):
 
 class AgentActionPayload(BaseModel):
     endpoint: str = Field(
-        description="The API endpoint to call (e.g., /api/v1/leaves)."
+        description="The fully-resolved API endpoint path with NO placeholder variables. Path parameters MUST be substituted with real values (e.g. use '/api/v1/tickets/123', NOT '/api/v1/tickets/{ticket_id}'). If a required ID (int) is unknown, it is a missing_field — do NOT output the payload until it is known."
     )
     method: str = Field(description="The HTTP method to use (e.g., POST, PUT, DELETE).")
     data: dict = Field(

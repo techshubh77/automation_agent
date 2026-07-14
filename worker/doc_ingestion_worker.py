@@ -19,6 +19,7 @@ HOW ORPHANED DOCUMENTS ARE PREVENTED:
 
 import asyncio
 import hashlib
+import json
 import os
 import uuid
 
@@ -149,22 +150,36 @@ async def _run_ingestion(ctx, doc_id: str, filepath: str) -> None:
                     f"[Worker] Unsupported document file type label: {doc.file_type}"
                 )
 
-            parsed_text = parser.parse_file_content(file_bytes)
-            logger.info(
-                "[Worker] File parsed successfully. Characters: %d", len(parsed_text)
-            )
-
+            parsed_data = parser.parse_file_content(file_bytes)
+            
             # 4. Chunk and Embed
-            chunks = TextChunker.chunk_text(parsed_text)
-            logger.info("[Worker] Generated {} text chunks.", len(chunks))
+            chunks = []
+            texts_to_embed = []
+            
+            if isinstance(parsed_data, list):
+                # JSON Parser path
+                logger.info("[Worker] File parsed successfully. Objects: %d", len(parsed_data))
+                for item in parsed_data:
+                    # Dump the JSON object to a string for storage in page_content
+                    chunks.append(json.dumps(item))
+                    # Extract embedding text (fallback to description or name, then full dump)
+                    emb_text = item.get("embedding_text") or item.get("description") or item.get("name") or json.dumps(item)
+                    texts_to_embed.append(emb_text)
+            else:
+                # Markdown Parser path
+                logger.info("[Worker] File parsed successfully. Characters: %d", len(parsed_data))
+                chunks = TextChunker.chunk_text(parsed_data)
+                texts_to_embed = chunks
+            
+            logger.info("[Worker] Generated {} chunks.", len(chunks))
 
             vectors = []
             tokens = 0
-            if chunks:
+            if texts_to_embed:
                 logger.info(
-                    "[Worker] Requesting embeddings from OpenAI for %d chunks...", len(chunks)
+                    "[Worker] Requesting embeddings from OpenAI for %d chunks...", len(texts_to_embed)
                 )
-                vectors, tokens = await Embedder.embed_documents(chunks)
+                vectors, tokens = await Embedder.embed_documents(texts_to_embed)
 
             # 5. Delete old vectors for this document before upserting new ones.
             # This prevents orphaned vectors when a file is re-uploaded.
@@ -202,26 +217,29 @@ async def _run_ingestion(ctx, doc_id: str, filepath: str) -> None:
 
             # 8. Bill the organization
             if tokens > 0 and doc.organization_id:
-                cost_breakdown = PricingEngine.calculate_cost(
+                cost_breakdown = PricingEngine.calculate(
                     provider="openai",
                     model=settings.openai_embedding_model,
                     input_tokens=tokens,
                     output_tokens=0,
+                    organization_id=doc.organization_id,
+                    reference_id=doc_id
                 )
                 
                 usage_log = CreditUsage(
                     organization_id=doc.organization_id,
                     operation_type="ingestion",
-                    credits_used=cost_breakdown["credits_used"],
-                    cost_breakdown=cost_breakdown,
-                    reference_id=doc_id
+                    credits_used=cost_breakdown.credits_used,
+                    cost_breakdown=cost_breakdown.model_dump(mode="json"),
+                    reference_id=doc_id,
+                    status="completed"
                 )
                 db.add(usage_log)
 
                 stmt = (
                     update(Organization)
                     .where(Organization.org_id == doc.organization_id)
-                    .values(credit_balance=Organization.credit_balance - cost_breakdown["credits_used"])
+                    .values(credit_balance=Organization.credit_balance - cost_breakdown.credits_used)
                 )
                 await db.execute(stmt)
 

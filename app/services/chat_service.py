@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -97,12 +98,16 @@ class ChatService:
             else:
                 langchain_messages = await cls._get_conversation_history(db, conv_uuid)
 
-            # 4. Execute Vector Search (RAG)
+            # 4. Contextual Query Rewriting
+            search_query = await cls._rewrite_query(langchain_messages, data.message)
+            logger.info("Rewritten search query: {}", search_query)
+
+            # 5. Execute Vector Search (RAG)
             formatted_context = await cls._retrieve_context(
-                data.message, data.organization_id, data.module
+                search_query, data.organization_id, data.module
             )
 
-            # 5. Build the Chat Prompt with Memory
+            # 6. Build the Chat Prompt with Memory
             qa_prompt = ChatPromptTemplate.from_messages(
                 [
                     ("system", SYSTEM_PROMPT + "\n\nContext Documents:\n{context}"),
@@ -375,7 +380,7 @@ class ChatService:
             )
 
         search_kwargs = {
-            "k": settings.top_k_chunks,
+            "k": settings.top_k_chunks,  # Return multiple atomic JSON schemas so the LLM can choose
             "score_threshold": settings.similarity_threshold,
         }
         if filter_conditions:
@@ -387,5 +392,46 @@ class ChatService:
         )
 
         logger.info("Retrieving documents from Qdrant with metadata filters...")
-        docs = await retriever.ainvoke(message)
-        return "\n\n---\n\n".join(doc.page_content for doc in docs)
+        try:
+            docs = await retriever.ainvoke(message)
+            return "\n\n---\n\n".join(doc.page_content for doc in docs)
+        except Exception as e:
+            logger.error("Vector retrieval failed (OpenAI embeddings timeout/error): {}", str(e))
+            raise AppError(
+                "Semantic search is temporarily unavailable due to high API load. Please try again later.",
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+            ) from e
+
+    @classmethod
+    async def _rewrite_query(cls, langchain_messages: list, current_message: str) -> str:
+        """
+        Rewrites the current message based on chat history to provide a standalone
+        semantic search query. Resolves the 'Context Loss' problem (e.g., user just says '123').
+        """
+        if len(langchain_messages) <= 1:
+            return current_message
+            
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You are an assistant. Rewrite the user's latest message into a standalone search query that captures their intent based on the conversation history. Do not answer the user, just rewrite the query."),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "Rewrite this into a standalone intent query: {current_message}"),
+            ]
+        )
+        llm = LLMFactory.get_gpt_4o_mini()
+        chain = prompt | llm
+        try:
+            # Pass all messages EXCEPT the last one (which is the current message already saved in DB)
+            history = langchain_messages[:-1]
+            # Hard enforce a 5-second timeout so query rewriting never stalls the chat request
+            response = await asyncio.wait_for(
+                chain.ainvoke({"chat_history": history, "current_message": current_message}),
+                timeout=5.0
+            )
+            return response.content.strip()
+        except asyncio.TimeoutError:
+            logger.warning("Query rewrite timed out, falling back to original message.")
+            return current_message
+        except Exception as e:
+            logger.warning("Query rewrite failed, falling back to original message: {}", e)
+            return current_message
