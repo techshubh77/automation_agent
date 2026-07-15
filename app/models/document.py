@@ -10,7 +10,7 @@ class Document(BaseModel):
     __tablename__ = "documents"
 
     organization_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("organizations.org_id"), nullable=True
+        String, ForeignKey("organizations.organization_id"), nullable=True
     )
     module: Mapped[str | None] = mapped_column(String, nullable=True)
     filename: Mapped[str | None] = mapped_column(String, nullable=True)

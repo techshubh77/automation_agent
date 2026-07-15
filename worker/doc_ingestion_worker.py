@@ -70,7 +70,7 @@ async def _mark_document_failed(doc_id: str, filepath: str, error: str) -> None:
                 if failed_doc.organization_id:
                     org_result = await recovery_db.execute(
                         select(Organization).where(
-                            Organization.org_id == failed_doc.organization_id
+                            Organization.organization_id == failed_doc.organization_id
                         )
                     )
                     org = org_result.scalars().first()
@@ -118,7 +118,7 @@ async def _run_ingestion(ctx, doc_id: str, filepath: str) -> None:
             if doc.organization_id:
                 org_result = await db.execute(
                     select(Organization).where(
-                        Organization.org_id == doc.organization_id
+                        Organization.organization_id == doc.organization_id
                     )
                 )
                 org = org_result.scalars().first()
@@ -238,7 +238,7 @@ async def _run_ingestion(ctx, doc_id: str, filepath: str) -> None:
 
                 stmt = (
                     update(Organization)
-                    .where(Organization.org_id == doc.organization_id)
+                    .where(Organization.organization_id == doc.organization_id)
                     .values(credit_balance=Organization.credit_balance - cost_breakdown.credits_used)
                 )
                 await db.execute(stmt)

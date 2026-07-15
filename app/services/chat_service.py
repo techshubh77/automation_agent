@@ -30,6 +30,42 @@ with open(PROMPTS_DIR / "system_prompt.txt", encoding="utf-8") as f:
 
 
 class ChatService:
+    _background_tasks = set()
+
+    @classmethod
+    def _create_background_task(cls, coro):
+        task = asyncio.create_task(coro)
+        cls._background_tasks.add(task)
+        task.add_done_callback(cls._background_tasks.discard)
+
+    @classmethod
+    async def _get_or_create_conversation(cls, data: ChatRequestSchema, db: AsyncSession) -> uuid.UUID:
+        if not data.conversation_id:
+            logger.info("No conversation_id provided. Starting a new chat session.")
+            generated_title = data.message[:50] + (
+                "..." if len(data.message) > 50 else ""
+            )
+            new_conv = Conversation(
+                organization_id=data.organization_id,
+                user_id=data.user_id,
+                title=generated_title,
+            )
+            db.add(new_conv)
+            await db.flush()
+            return new_conv.id
+
+        logger.info("Resuming conversation {}", data.conversation_id)
+        conv_uuid = data.conversation_id
+        existing = await db.execute(
+            select(Conversation).where(Conversation.id == conv_uuid)
+        )
+        if not existing.scalar_one_or_none():
+            raise AppError(
+                f"Conversation {data.conversation_id} not found",
+                status.HTTP_404_NOT_FOUND,
+            )
+        return conv_uuid
+
     @classmethod
     async def chat(
         cls, data: ChatRequestSchema, db: AsyncSession
@@ -42,7 +78,7 @@ class ChatService:
             # Uses a standard select. TOCTOU is prevented by the DB CHECK constraint.
             org_result = await db.execute(
                 select(Organization)
-                .where(Organization.org_id == data.organization_id)
+                .where(Organization.organization_id == data.organization_id)
             )
             org = org_result.scalar_one_or_none()
             if org is None:
@@ -57,30 +93,7 @@ class ChatService:
                 )
 
             # 1. Manage Conversation Session
-            if not data.conversation_id:
-                logger.info("No conversation_id provided. Starting a new chat session.")
-                generated_title = data.message[:50] + (
-                    "..." if len(data.message) > 50 else ""
-                )
-                new_conv = Conversation(
-                    organization_id=data.organization_id,
-                    user_id=data.user_id,
-                    title=generated_title,
-                )
-                db.add(new_conv)
-                await db.flush()
-                conv_uuid = new_conv.id
-            else:
-                logger.info("Resuming conversation {}", data.conversation_id)
-                conv_uuid = data.conversation_id
-                existing = await db.execute(
-                    select(Conversation).where(Conversation.id == conv_uuid)
-                )
-                if not existing.scalar_one_or_none():
-                    raise AppError(
-                        f"Conversation {data.conversation_id} not found",
-                        status.HTTP_404_NOT_FOUND,
-                    )
+            conv_uuid = await cls._get_or_create_conversation(data, db)
 
             # 2. Save the Human Message
             db.add(
@@ -99,7 +112,7 @@ class ChatService:
                 langchain_messages = await cls._get_conversation_history(db, conv_uuid)
 
             # 4. Contextual Query Rewriting
-            search_query = await cls._rewrite_query(langchain_messages, data.message)
+            search_query, rewrite_raw_msg = await cls._rewrite_query(langchain_messages, data.message)
             logger.info("Rewritten search query: {}", search_query)
 
             # 5. Execute Vector Search (RAG)
@@ -130,7 +143,6 @@ class ChatService:
                 response = await chain.ainvoke(
                     {"context": formatted_context, "chat_history": langchain_messages}
                 )
-                agent_response: AgentResponse = response["parsed"]
             except Exception as e:
                 logger.critical("ALL LLM PROVIDERS FAILED: {}", str(e))
                 raise AppError(
@@ -139,15 +151,36 @@ class ChatService:
                 ) from e
 
             # 7. BILLING — committed in its own independent transaction
-            # This transaction is intentionally isolated from the chat transaction.
-            # If billing fails, the error is logged but the chat response is still returned.
-            # If the chat message save (step 8) fails later, billing is NOT rolled back
-            # because the LLM provider was already charged real money for this call.
-            await cls._commit_billing(
-                raw_msg=response["raw"],
-                organization_id=data.organization_id,
-                conv_uuid=conv_uuid,
+            cls._create_background_task(
+                cls._commit_billing(
+                    raw_msg=response["raw"],
+                    organization_id=data.organization_id,
+                    conv_uuid=conv_uuid,
+                    model_info=LLMFactory.get_primary_model_info(),
+                    operation_type="chat",
+                )
             )
+
+            if rewrite_raw_msg:
+                cls._create_background_task(
+                    cls._commit_billing(
+                        raw_msg=rewrite_raw_msg,
+                        organization_id=data.organization_id,
+                        conv_uuid=conv_uuid,
+                        model_info={"provider": "openai", "model": "gpt-4o-mini"},
+                        operation_type="query_rewrite",
+                    )
+                )
+
+            # Check if LLM refused to return the structured JSON or failed parsing
+            agent_response: AgentResponse = response.get("parsed")
+            if not agent_response:
+                parsing_error = response.get("parsing_error")
+                logger.error("LLM failed to return valid structured output. Error: {}", parsing_error)
+                raise AppError(
+                    "I am having trouble processing that request. Could you please rephrase it?",
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
             # 8. Save the AI Message
             meta_data = {
@@ -186,11 +219,11 @@ class ChatService:
             ) from e
 
     @staticmethod
-    async def index(org_id: str, db: AsyncSession, search: str | None = None, limit: int = 10, offset: int = 0):
+    async def index(organization_id: str, db: AsyncSession, search: str | None = None, limit: int = 10, offset: int = 0):
         """Retrieve chat history (conversations) for an organization."""
         stmt = (
             select(Conversation)
-            .where(Conversation.organization_id == org_id)
+            .where(Conversation.organization_id == organization_id)
         )
         
         if search:
@@ -248,6 +281,8 @@ class ChatService:
         raw_msg,
         organization_id: str,
         conv_uuid: uuid.UUID,
+        model_info: dict,
+        operation_type: str = "chat",
     ) -> None:
         """
         Persists the credit usage record and deducts credits from the organization
@@ -275,8 +310,6 @@ class ChatService:
             return
 
         # Get the provider and model that were actually used
-        model_info = LLMFactory.get_primary_model_info()
-
         # Calculate the exact cost using Decimal precision
         breakdown = PricingEngine.calculate(
             provider=model_info["provider"],
@@ -302,7 +335,7 @@ class ChatService:
                     CreditUsage(
                         organization_id=organization_id,
                         reference_id=str(conv_uuid),
-                        operation_type="chat",
+                        operation_type=operation_type,
                         credits_used=breakdown.credits_used,
                         status="completed",
                         cost_breakdown=breakdown.model_dump(mode="json"),
@@ -313,7 +346,7 @@ class ChatService:
                 # at the row level, making this safe under concurrent requests
                 await billing_db.execute(
                     update(Organization)
-                    .where(Organization.org_id == organization_id)
+                    .where(Organization.organization_id == organization_id)
                     .values(
                         credit_balance=Organization.credit_balance - breakdown.credits_used
                     )
@@ -403,13 +436,13 @@ class ChatService:
             ) from e
 
     @classmethod
-    async def _rewrite_query(cls, langchain_messages: list, current_message: str) -> str:
+    async def _rewrite_query(cls, langchain_messages: list, current_message: str) -> tuple[str, AIMessage | None]:
         """
         Rewrites the current message based on chat history to provide a standalone
         semantic search query. Resolves the 'Context Loss' problem (e.g., user just says '123').
         """
         if len(langchain_messages) <= 1:
-            return current_message
+            return current_message, None
             
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -428,10 +461,10 @@ class ChatService:
                 chain.ainvoke({"chat_history": history, "current_message": current_message}),
                 timeout=5.0
             )
-            return response.content.strip()
+            return response.content.strip(), response
         except asyncio.TimeoutError:
             logger.warning("Query rewrite timed out, falling back to original message.")
-            return current_message
+            return current_message, None
         except Exception as e:
             logger.warning("Query rewrite failed, falling back to original message: {}", e)
-            return current_message
+            return current_message, None

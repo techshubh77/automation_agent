@@ -20,7 +20,7 @@ class CreditUsage(BaseModel):
 
     organization_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("organizations.org_id", ondelete="CASCADE"),
+        ForeignKey("organizations.organization_id", ondelete="CASCADE"),
         index=True,
         nullable=False,
     )

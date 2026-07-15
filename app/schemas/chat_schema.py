@@ -52,9 +52,11 @@ class AgentResponse(BaseModel):
 
     # Populated in Stage 1 and Stage 2:
     missing_fields: list[str] = Field(
+        default_factory=list,
         description="Fields that are truly missing and cannot be inferred. Empty list [] in Stage 2 and Stage 3. NEVER include 'title' or 'description' if the user provided any descriptive context at all.",
     )
     payload_example: dict = Field(
+        default_factory=dict,
         description="The data dict showing what you have inferred or extracted so far. In Stage 1, show partial data already inferred. In Stage 2, show the complete confirmed data. Empty dict {} in Stage 3 and Mode A (pure conversation).",
     )
 

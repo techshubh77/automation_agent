@@ -7,11 +7,10 @@ It also sets the conversion rate between USD and internal System Credits.
 1 Credit = $0.01 USD
 """
 
-import logging
 from decimal import Decimal
 from types import MappingProxyType
 
-logger = logging.getLogger(__name__)
+from app.utils.logger import logger
 
 PRICING_CONFIG = {
     "version": "pricing_v1",

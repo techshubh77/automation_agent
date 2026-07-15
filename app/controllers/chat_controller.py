@@ -41,10 +41,10 @@ class ChatController:
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             ) from e
 
-    @staticmethod
-    async def index(org_id: str, db: AsyncSession, search: str | None = None, limit: int = 10, offset: int = 0):
+    @classmethod
+    async def index(cls, organization_id: str, db: AsyncSession, search: str | None = None, limit: int = 10, offset: int = 0):
         try:
-            history = await ChatService.index(org_id, db, search, limit, offset)
+            history = await ChatService.index(organization_id, db, search, limit, offset)
             formatted_history = jsonable_encoder(
                 [ConversationResponseSchema.model_validate(c) for c in history]
             )

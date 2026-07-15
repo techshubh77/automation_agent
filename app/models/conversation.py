@@ -14,7 +14,7 @@ class Conversation(BaseModel):
     __tablename__ = "conversations"
 
     organization_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("organizations.org_id"), nullable=True
+        String, ForeignKey("organizations.organization_id"), nullable=True
     )
     user_id: Mapped[str | None] = mapped_column(String, nullable=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True)

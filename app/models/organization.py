@@ -9,7 +9,7 @@ from app.models.base import BaseModel
 class Organization(BaseModel):
     __tablename__ = "organizations"
 
-    org_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    organization_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     email: Mapped[str | None] = mapped_column(String, nullable=True)
 
