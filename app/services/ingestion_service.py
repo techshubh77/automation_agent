@@ -85,6 +85,7 @@ class IngestionService:
             logger.info("Created new document record {} in pending state.", document_id_str)
         return document_id_str
 
+    # Enqueue file ingestion process in background worker
     @classmethod
     async def enqueue_file_ingestion(
         cls,
@@ -97,8 +98,8 @@ class IngestionService:
     ) -> dict:
         logger.info("Enqueuing ingestion process for file: {}", file.filename)
 
-        # ── Active Job Guard ──────────────────────────────────────────────────
-        # Block if a genuinely active job exists for this org.
+        # Active Job Guard 
+        # Block if a active job exists for this org.
         # Documents stuck beyond STALE_JOB_MINUTES are considered orphaned and
         # do NOT block new uploads. They will be cleaned up below.
         if organization_id:
@@ -106,7 +107,7 @@ class IngestionService:
             active_jobs_query = select(Document).where(
                 Document.organization_id == organization_id,
                 Document.status.in_(["pending", "processing"]),
-                Document.updated_at > stale_cutoff,  # Only block if recently updated
+                Document.updated_at > stale_cutoff, 
             )
             active_jobs_result = await db.execute(active_jobs_query)
             if active_jobs_result.scalars().first():

@@ -43,9 +43,9 @@ PRICING_CONFIG = {
         "openai": {
             "models": {
                 "gpt-4o": {
-                    "input_price_per_1k_usd": Decimal("0.005"),
-                    "output_price_per_1k_usd": Decimal("0.015"),
-                },
+                    "input_price_per_1k_usd": Decimal("0.0025"),
+                    "output_price_per_1k_usd": Decimal("0.0100"),
+                },  
                 "gpt-4o-mini": {
                     "input_price_per_1k_usd": Decimal("0.00015"),
                     "output_price_per_1k_usd": Decimal("0.00060"),

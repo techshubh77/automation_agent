@@ -2,6 +2,7 @@ import asyncio
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 from app.config.settings import settings
 
@@ -46,7 +47,6 @@ class VectorStore:
     @classmethod
     async def delete_by_document_id(cls, document_id: str):
         """Delete old vectors for update/overwrite (non-blocking)"""
-        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         client = cls.get_client()
         cls.init_collection()

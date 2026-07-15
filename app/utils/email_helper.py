@@ -46,7 +46,6 @@ async def send_ingestion_alert(
     filename: str,
     status: str,
     to_email: str,
-    error_message: str | None = None,
 ):
     """Asynchronous wrapper that offloads the SMTP connection to a worker thread."""
     subject = f"Ingestion Job {status.upper()}: {filename}"
@@ -57,13 +56,13 @@ async def send_ingestion_alert(
     status_text = "Successfully Completed" if status == "completed" else "Failed"
 
     error_block = (
-        f"""
+        """
     <div style="margin-top: 20px; padding: 15px; background-color: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 4px;">
-        <h4 style="margin: 0 0 10px 0; color: #991B1B; font-size: 14px;">Error Details</h4>
-        <pre style="margin: 0; color: #7F1D1D; font-family: ui-monospace, monospace; font-size: 13px; white-space: pre-wrap;">{error_message}</pre>
+        <h4 style="margin: 0 0 10px 0; color: #991B1B; font-size: 14px;">Processing Failed</h4>
+        <p style="margin: 0; color: #7F1D1D; font-size: 13px;">The document could not be processed successfully. Please check the dashboard or contact support for more details.</p>
     </div>
     """
-        if status != "completed" and error_message
+        if status != "completed"
         else ""
     )
 

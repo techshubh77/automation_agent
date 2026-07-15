@@ -7,7 +7,6 @@ if __name__ == "__main__":
     logger.info(f"Starting Uvicorn server on port {settings.port}...")
 
     # Run the FastAPI app via Uvicorn
-    # This acts exactly like app.listen() in Node.js
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

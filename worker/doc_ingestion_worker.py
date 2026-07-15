@@ -80,7 +80,6 @@ async def _mark_document_failed(doc_id: str, filepath: str, error: str) -> None:
                             failed_doc.filename,
                             "failed",
                             to_email=org.email,
-                            error_message=error,
                         )
     except Exception as recovery_err:
         # If even the recovery fails, log it loudly — a human must intervene.

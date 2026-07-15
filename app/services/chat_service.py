@@ -73,7 +73,7 @@ class ChatService:
         logger.info("Received chat request: {}", data.message)
 
         try:
-            # ── PRE-FLIGHT: Credit Balance Check ─────────────────────────────
+            # PRE-FLIGHT: Credit Balance Check 
             # Block the request immediately if the organization has no credits.
             # Uses a standard select. TOCTOU is prevented by the DB CHECK constraint.
             org_result = await db.execute(
@@ -121,13 +121,17 @@ class ChatService:
             )
 
             # 6. Build the Chat Prompt with Memory
+            from datetime import datetime
+            current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            dynamic_system_prompt = f"The current date and time is: {current_time_str}\n\n{SYSTEM_PROMPT}"
+
             qa_prompt = ChatPromptTemplate.from_messages(
                 [
-                    ("system", SYSTEM_PROMPT + "\n\nContext Documents:\n{context}"),
+                    ("system", dynamic_system_prompt + "\n\nContext Documents:\n{context}"),
                     MessagesPlaceholder(variable_name="chat_history"),
                 ]
             )
-
+ 
             # 6. Execute LLM Call
             logger.info("Retrieving robust LLM from Factory...")
             robust_llm = LLMFactory.get_robust_llm()

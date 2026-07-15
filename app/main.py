@@ -38,7 +38,6 @@ secure_headers = secure.Secure()
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events.
-    This replaces the deprecated @app.on_event("startup")
     """
     logger.info(f"Starting {settings.app_name} in {settings.env} mode...")
 

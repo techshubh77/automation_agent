@@ -6,7 +6,7 @@ from app.config.rate_limiter import limiter
 from app.controllers.ingestion_controller import IngestionController
 from app.schemas.source_type_schema import SourceType
 
-# Create the router with the /api/v1/ingestion prefix
+# Router with the /api/v1/ingestion prefix
 router = APIRouter(prefix="/ingestion", tags=["Ingestion"])
 
 
