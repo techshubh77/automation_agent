@@ -1,3 +1,5 @@
+set dotenv-load := true
+
 # Start the development server : just dev
 dev:
     uv run python -m app.server
@@ -28,7 +30,7 @@ format:
 sonar:
     uv run pysonar \
         --sonar-host-url=http://localhost:9000 \
-        --sonar-token=sqp_3b7feae1c57bc659f215f0696cc15e348ac6a615 \
+        --sonar-token=$SONAR_TOKEN \
         --sonar-project-key=automation-agent
 
 # Check code without modifying (useful for CI)
